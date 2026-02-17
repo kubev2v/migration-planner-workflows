@@ -167,20 +167,22 @@ jobs:
       # Step 5: Publish to npm (unless dry-run)
       # Uses OIDC Trusted Publishing exclusively.
       #
-      # Why the sed command below is necessary:
-      #   actions/setup-node with registry-url always writes an _authToken
-      #   placeholder into ~/.npmrc (e.g. //<registry>/:_authToken=${NODE_AUTH_TOKEN}).
-      #   When NODE_AUTH_TOKEN is not set, npm resolves this to an empty string
-      #   and treats it as "auth is configured but invalid", failing with ENEEDAUTH
-      #   instead of falling through to OIDC. Commenting out that line removes the
-      #   token-based auth entry so npm proceeds to the Trusted Publishing flow.
+      # Why we overwrite NPM_CONFIG_USERCONFIG:
+      #   actions/setup-node with registry-url creates a .npmrc at
+      #   $NPM_CONFIG_USERCONFIG containing an _authToken placeholder
+      #   (e.g. //<registry>/:_authToken=${NODE_AUTH_TOKEN}).
+      #   When NODE_AUTH_TOKEN is unset, npm resolves this to an empty
+      #   string and treats it as "auth configured but invalid", failing
+      #   with ENEEDAUTH instead of falling through to OIDC.
+      #   Overwriting the file with only the registry line strips the
+      #   token-based auth so npm proceeds to Trusted Publishing.
       # -----------------------------------------------------------------------
       - name: Publish to npm
         if: ${{ inputs.dry-run != true }}
         working-directory: generated-client
         run: |
-          # Disable the _authToken placeholder so npm falls through to OIDC
-          sed -i 's/.*_authToken.*/#&/' "$HOME/.npmrc" 2>/dev/null || true
+          # Strip token auth from .npmrc so npm falls through to OIDC
+          echo "registry=${{ inputs.npm-registry }}" > "$NPM_CONFIG_USERCONFIG"
           echo "🚀 Publishing ${{ inputs.package-name }}@${{ inputs.package-version }} to npm..."
           npm publish --access public --provenance
           echo "✅ Package published successfully!"

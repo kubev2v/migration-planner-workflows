@@ -76,9 +76,9 @@ jobs:
           echo "🧹 Cleaning up test package..."
           echo "   Package: ${{ env.TEST_PACKAGE_NAME }}@${{ env.TEST_PACKAGE_VERSION }}"
 
-          # Disable the _authToken placeholder so npm falls through to OIDC
+          # Strip token auth from .npmrc so npm falls through to OIDC
           # (see generate-and-publish.yml Step 5 comment for full explanation)
-          sed -i 's/.*_authToken.*/#&/' "$HOME/.npmrc" 2>/dev/null || true
+          echo "registry=https://registry.npmjs.org" > "$NPM_CONFIG_USERCONFIG"
 
           npm unpublish "${{ env.TEST_PACKAGE_NAME }}@${{ env.TEST_PACKAGE_VERSION }}" --force
           echo "✅ Test package removed from npm"
