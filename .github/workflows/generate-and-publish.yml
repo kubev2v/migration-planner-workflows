@@ -7,9 +7,6 @@
 #
 # Output: Generated client is placed in the 'generated-client' directory
 #
-# Authorization: Calls from this repository are automatically authorized.
-# External repositories must be listed in .github/allowed_repos.json (source of truth).
-#
 # Publishing Authentication:
 #   Uses npm Trusted Publishing (OIDC) exclusively — no long-lived tokens.
 #   - Requires id-token: write permission in calling workflow
@@ -54,60 +51,8 @@ on:
         default: false
 
 jobs:
-  # ===========================================================================
-  # Job 1: Authorization Check
-  # ===========================================================================
-  # This repository is automatically authorized (for CI/testing).
-  # External repositories must be listed in .github/allowed_repos.json.
-  # ===========================================================================
-  authorize:
-    name: Verify Authorization
-    runs-on: ubuntu-latest
-    outputs:
-      authorized: ${{ steps.check.outputs.authorized }}
-    steps:
-      - name: Verify caller is authorized
-        id: check
-        env:
-          CALLER_REPO: ${{ github.repository }}
-          THIS_REPO: "kubev2v/migration-planner-client-generator"
-          ALLOWED_REPOS_URL: "https://raw.githubusercontent.com/kubev2v/migration-planner-client-generator/main/.github/allowed_repos.json"
-        run: |
-          set -e
-          # Allow calls from this repository (for CI/testing)
-          if [ "$CALLER_REPO" = "$THIS_REPO" ]; then
-            echo "authorized=true" >> $GITHUB_OUTPUT
-            echo "✅ Repository is authorized (same-repo call)"
-            exit 0
-          fi
-          
-          # Fetch allowed repos list (source of truth in this repo)
-          ALLOWED_REPOS=$(curl -sL "$ALLOWED_REPOS_URL") || true
-          if [ -z "$ALLOWED_REPOS" ]; then
-            echo "::error::Failed to fetch .github/allowed_repos.json"
-            exit 1
-          fi
-          
-          if ! echo "$ALLOWED_REPOS" | jq empty 2>/dev/null; then
-            echo "::error::allowed_repos.json is not valid JSON"
-            exit 1
-          fi
-          
-          if echo "$ALLOWED_REPOS" | jq -e --arg repo "$CALLER_REPO" 'index($repo) != null' > /dev/null; then
-            echo "authorized=true" >> $GITHUB_OUTPUT
-            echo "✅ Repository is authorized"
-          else
-            echo "::error::Unauthorized repository attempted to call this workflow"
-            exit 1
-          fi
-
-  # ===========================================================================
-  # Job 2: Generate and Publish
-  # ===========================================================================
   generate-and-publish:
     name: Generate & Publish Client
-    needs: authorize
-    if: needs.authorize.outputs.authorized == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write  # Required for npm Trusted Publishing (OIDC)
@@ -132,7 +77,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: ${{ inputs.npm-registry }}
 
       # -----------------------------------------------------------------------
@@ -156,7 +101,7 @@ jobs:
         working-directory: generated-client
         run: |
           echo "📦 Installing dependencies..."
-          npm install
+          npm ci
           
           echo "🔨 Building package..."
           npm run build --if-present
@@ -184,7 +129,7 @@ jobs:
           # Strip token auth from .npmrc so npm falls through to OIDC
           echo "registry=${{ inputs.npm-registry }}" > "$NPM_CONFIG_USERCONFIG"
           echo "🚀 Publishing ${{ inputs.package-name }}@${{ inputs.package-version }} to npm..."
-          npm publish --access public --provenance
+          npm publish --access public
           echo "✅ Package published successfully!"
 
       - name: Dry Run Summary

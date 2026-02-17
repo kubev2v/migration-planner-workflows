@@ -4,7 +4,7 @@
 # Local testing with act-cli
 # =============================================================================
 
-.PHONY: help test test-verbose test-allowlist test-all clean check-act
+.PHONY: help test test-verbose clean check-act
 
 # Default target
 help:
@@ -13,8 +13,6 @@ help:
 	@echo "Usage:"
 	@echo "  make test            Run test workflow via act (dry-run mode, no npm publish)"
 	@echo "  make test-verbose   Run test workflow with verbose output"
-	@echo "  make test-allowlist Run allowlist validation and authorize logic tests (no Docker)"
-	@echo "  make test-all       Run test-allowlist then test (act)"
 	@echo "  make clean           Remove generated artifacts"
 	@echo "  make check-act       Verify act-cli is installed"
 	@echo ""
@@ -46,17 +44,6 @@ ACT_FLAGS = --bind \
 	--container-daemon-socket /var/run/docker.sock \
 	--env GITHUB_REPOSITORY=$(GITHUB_REPOSITORY) \
 	-P ubuntu-latest=catthehacker/ubuntu:act-latest
-
-# Run allowlist and authorize logic tests (no Docker/act)
-test-allowlist:
-	@echo "🧪 Running allowlist and authorize logic tests..."
-	@./tests/validate_allowed_repos.sh
-	@./tests/test_authorize_logic.sh
-	@echo "✅ test-allowlist passed"
-
-# Run allowlist tests then full act workflow test
-test-all: test-allowlist test
-	@echo "✅ test-all passed"
 
 # Run test workflow (dry-run mode - no actual publishing)
 test: check-act
