@@ -60,7 +60,16 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # Step 1: Generate the client using OpenAPI Generator
+      # Step 1: Setup Node.js environment
+      # -----------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: ${{ inputs.npm-registry }}
+
+      # -----------------------------------------------------------------------
+      # Step 2: Generate the client using OpenAPI Generator
       # -----------------------------------------------------------------------
       - name: Generate OpenAPI Client
         uses: openapi-generators/openapitools-generator-action@v1
@@ -70,15 +79,6 @@ jobs:
           command-args: >-
             -o generated-client
             --additional-properties=npmName=${{ inputs.package-name }},npmVersion=${{ inputs.package-version }},ensureUniqueParams=true,supportsES6=true,withInterfaces=true,importFileExtension=.js
-
-      # -----------------------------------------------------------------------
-      # Step 2: Setup Node.js environment
-      # -----------------------------------------------------------------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          registry-url: ${{ inputs.npm-registry }}
 
       # -----------------------------------------------------------------------
       # Step 3: Configure additional package metadata
@@ -101,12 +101,13 @@ jobs:
         working-directory: generated-client
         run: |
           echo "📦 Installing dependencies..."
-          npm ci
+          npm install
           
           echo "🔨 Building package..."
           npm run build --if-present
           
           echo "✅ Build completed successfully"
+          ls $PWD
 
       # -----------------------------------------------------------------------
       # Step 5: Publish to npm (unless dry-run)
@@ -126,6 +127,9 @@ jobs:
         if: ${{ inputs.dry-run != true }}
         working-directory: generated-client
         run: |
+          echo "Debug NPM_CONFIG_USERCONFIG:"
+          cat "$NPM_CONFIG_USERCONFIG"
+          npm config list | grep npmrc
           # Strip token auth from .npmrc so npm falls through to OIDC
           echo "registry=${{ inputs.npm-registry }}" > "$NPM_CONFIG_USERCONFIG"
           echo "🚀 Publishing ${{ inputs.package-name }}@${{ inputs.package-version }} to npm..."
