@@ -67,21 +67,16 @@ These settings are intentionally hardcoded and must match [kubev2v/migration-pla
 
 ### npm Publishing Authentication
 
-This workflow uses **npm Trusted Publishing (OIDC)** as the primary authentication method:
+This workflow uses **npm Trusted Publishing (OIDC)** exclusively — no long-lived tokens:
 
-1. **OIDC (Preferred)** - No long-lived tokens needed
-   - Requires `id-token: write` permission in calling workflow
-   - Requires Trusted Publisher configured on [npmjs.com](https://docs.npmjs.com/trusted-publishers)
-   - Calling workflow must use `secrets: inherit` to pass OIDC permissions
-
-2. **NPM_TOKEN (Fallback)** - Used when OIDC is unavailable
-   - Required for local testing with act-cli (OIDC doesn't work locally)
-   - npm CLI automatically prefers OIDC when available
+- Requires `id-token: write` permission in calling workflow
+- Requires Trusted Publisher configured on [npmjs.com](https://docs.npmjs.com/trusted-publishers)
+- Calling workflow must use `secrets: inherit` to pass OIDC permissions
+- Publishes with `--provenance` for supply-chain attestation
 
 ### Required Secrets
 
-**In this repository:**
-- `NPM_TOKEN` - *(optional)* npm access token, only needed for local testing fallback
+None. Authentication is handled entirely via OIDC Trusted Publishing.
 
 **In calling repositories:**
 - Calling workflow must have `permissions: id-token: write` for OIDC
@@ -92,14 +87,8 @@ This workflow uses **npm Trusted Publishing (OIDC)** as the primary authenticati
 ### Testing with act-cli
 
 ```bash
-# Setup (first time)
-make setup-secrets
-
 # Run tests (dry-run mode - no npm publishing)
 make test
-
-# Run tests with actual npm publishing (for debugging)
-make test-publish
 
 # Verbose output for debugging
 make test-verbose
@@ -107,6 +96,8 @@ make test-verbose
 # Cleanup generated files
 make clean
 ```
+
+> **Note:** OIDC Trusted Publishing does not work locally with act-cli. Local testing is limited to dry-run mode. To test actual npm publishing, use the CI feature toggle described below.
 
 ### Prerequisites
 
@@ -118,22 +109,6 @@ make clean
 | Command | Mode | Description |
 |---------|------|-------------|
 | `make test` | Dry-run | Tests generation and build only (default, safe) |
-| `make test-publish` | Publish | Tests full publish + cleanup flow |
-
-### Local Publishing Tests
-
-**Important:** OIDC (Trusted Publishing) does not work with act-cli because it requires GitHub's OIDC token endpoint.
-
-For local publish testing:
-1. Edit `.secrets` and replace `NPM_TOKEN=fake-token-for-testing` with a real npm granular access token
-2. Run `make test-publish` to test actual publishing
-3. The workflow will automatically fall back to token-based auth when OIDC is unavailable
-4. Test packages are automatically unpublished after successful publish
-
-```bash
-# .secrets file for local publish testing
-NPM_TOKEN=npm_your-real-granular-token-here
-```
 
 ### CI Feature Toggle
 

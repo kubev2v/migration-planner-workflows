@@ -10,19 +10,17 @@
 # Authorization: Calls from this repository are automatically authorized.
 # External repositories must be listed in .github/allowed_repos.json (source of truth).
 #
-# Publishing Authentication (in order of precedence):
-#   1. npm Trusted Publishing (OIDC) - preferred, no long-lived tokens needed
-#      - Requires id-token: write permission in calling workflow
-#      - Requires Trusted Publisher configured on npmjs.com
-#      - See: https://docs.npmjs.com/trusted-publishers
-#   2. NPM_TOKEN fallback - used when OIDC is unavailable (e.g., local testing)
-#      - Provide NPM_TOKEN secret for local testing with act-cli
-#      - npm CLI automatically prefers OIDC when available
+# Publishing Authentication:
+#   Uses npm Trusted Publishing (OIDC) exclusively — no long-lived tokens.
+#   - Requires id-token: write permission in calling workflow
+#   - Requires Trusted Publisher configured on npmjs.com
+#   - Calling workflow must use 'secrets: inherit' to pass OIDC permissions
+#   - See: https://docs.npmjs.com/trusted-publishers
 #
 # Local Testing with act-cli:
-#   OIDC doesn't work locally. To test publishing with act:
-#   1. Add a real NPM_TOKEN to your .secrets file
-#   2. The workflow will automatically fall back to token-based auth
+#   OIDC doesn't work locally, so only dry-run mode is available.
+#   Use 'make test' for local testing; actual publish testing should be
+#   done in CI where OIDC is available.
 #
 # Repository: kubev2v/migration-planner-client-generator
 # =============================================================================
@@ -54,10 +52,6 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      NPM_TOKEN:
-        description: 'npm access token - fallback for when OIDC is unavailable (e.g.: local testing with act-cli)'
-        required: false
 
 jobs:
   # ===========================================================================
@@ -171,21 +165,25 @@ jobs:
 
       # -----------------------------------------------------------------------
       # Step 5: Publish to npm (unless dry-run)
-      # Authentication precedence:
-      #   1. OIDC (Trusted Publishing) - automatic on GitHub Actions
-      #   2. NODE_AUTH_TOKEN fallback - for local testing with act-cli
-      # npm CLI automatically prefers OIDC when available
+      # Uses OIDC Trusted Publishing exclusively.
+      #
+      # Why the sed command below is necessary:
+      #   actions/setup-node with registry-url always writes an _authToken
+      #   placeholder into ~/.npmrc (e.g. //<registry>/:_authToken=${NODE_AUTH_TOKEN}).
+      #   When NODE_AUTH_TOKEN is not set, npm resolves this to an empty string
+      #   and treats it as "auth is configured but invalid", failing with ENEEDAUTH
+      #   instead of falling through to OIDC. Commenting out that line removes the
+      #   token-based auth entry so npm proceeds to the Trusted Publishing flow.
       # -----------------------------------------------------------------------
       - name: Publish to npm
         if: ${{ inputs.dry-run != true }}
         working-directory: generated-client
         run: |
+          # Disable the _authToken placeholder so npm falls through to OIDC
+          sed -i 's/.*_authToken.*/#&/' "$HOME/.npmrc" 2>/dev/null || true
           echo "🚀 Publishing ${{ inputs.package-name }}@${{ inputs.package-version }} to npm..."
-          npm publish --access public
+          npm publish --access public --provenance
           echo "✅ Package published successfully!"
-        env:
-          # Fallback for local testing - npm prefers OIDC when available
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Dry Run Summary
         if: ${{ inputs.dry-run == true }}

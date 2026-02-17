@@ -48,8 +48,7 @@ jobs:
       # Feature toggle: set vars.TEST_NPM_PUBLISH = "true" to enable actual publishing
       # Default is dry-run mode to avoid npm rate limits and accidental publishes
       dry-run: ${{ vars.TEST_NPM_PUBLISH != 'true' }}
-    # Note: 'secrets: inherit' is required to pass the GITHUB_TOKEN with id-token
-    # permission to the reusable workflow for npm Trusted Publishing (OIDC)
+    # Required: passes OIDC id-token permission to the reusable workflow
     secrets: inherit
 
   # ===========================================================================
@@ -76,11 +75,10 @@ jobs:
         run: |
           echo "🧹 Cleaning up test package..."
           echo "   Package: ${{ env.TEST_PACKAGE_NAME }}@${{ env.TEST_PACKAGE_VERSION }}"
-          
-          # Unpublish the specific version
+
+          # Disable the _authToken placeholder so npm falls through to OIDC
+          # (see generate-and-publish.yml Step 5 comment for full explanation)
+          sed -i 's/.*_authToken.*/#&/' "$HOME/.npmrc" 2>/dev/null || true
+
           npm unpublish "${{ env.TEST_PACKAGE_NAME }}@${{ env.TEST_PACKAGE_VERSION }}" --force
-          
           echo "✅ Test package removed from npm"
-        env:
-          # Fallback for local testing - npm prefers OIDC when available
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

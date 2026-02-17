@@ -12,8 +12,5 @@
 # Use medium-sized Ubuntu image (includes most tools)
 -P ubuntu-latest=catthehacker/ubuntu:act-latest
 
-# Default secrets file (create .secrets file with your test secrets)
---secret-file .secrets
-
 # Verbose output for debugging
 # --verbose

@@ -60,18 +60,13 @@ jobs:
 
 ### npm Publishing Authentication
 
-This workflow uses **npm Trusted Publishing (OIDC)** as the primary authentication method:
+This workflow uses **npm Trusted Publishing (OIDC)** exclusively — no long-lived tokens:
 
-- **No long-lived npm tokens needed** - OIDC provides short-lived, workflow-specific credentials
+- **No npm tokens needed** — OIDC provides short-lived, workflow-specific credentials
 - Requires `id-token: write` permission in calling workflow
 - Requires [Trusted Publisher](https://docs.npmjs.com/trusted-publishers) configured on npmjs.com
 - Use `secrets: inherit` to pass OIDC permissions to the reusable workflow
-
-### Required Secrets
-
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `NPM_TOKEN` | No | Only needed for local testing with act-cli (OIDC fallback) |
+- Publishes with `--provenance` for supply-chain attestation
 
 Authorization is controlled by `.github/allowed_repos.json` in this repository (see [Authorization Model](#authorization-model)).
 
@@ -129,18 +124,14 @@ Use [act](https://github.com/nektos/act) to test GitHub Actions locally:
 # Install act (macOS)
 brew install act
 
-# Setup secrets file (first time)
-make setup-secrets
-
 # Run test workflow (dry-run mode - no npm publishing)
 make test
-
-# Run test workflow with actual npm publishing (requires real NPM_TOKEN)
-make test-publish
 
 # Cleanup generated files
 make clean
 ```
+
+> **Note:** OIDC Trusted Publishing does not work locally with act-cli. Local testing is limited to dry-run mode. To test actual npm publishing, use the CI feature toggle described below.
 
 ### Allowlist tests (no Docker)
 
@@ -159,9 +150,7 @@ These tests validate `.github/allowed_repos.json` (valid JSON, array of strings)
 | `make test` | Run workflow in dry-run mode via act (tests generation/build only) |
 | `make test-allowlist` | Run allowlist and authorize logic tests (no Docker) |
 | `make test-all` | Run test-allowlist then make test |
-| `make test-publish` | Run workflow with actual npm publishing + cleanup |
 | `make test-verbose` | Run workflow with verbose output |
-| `make setup-secrets` | Create `.secrets` file template |
 | `make clean` | Remove generated artifacts |
 
 ### CI Feature Toggle
