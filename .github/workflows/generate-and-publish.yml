@@ -154,7 +154,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Package Name | \`${{ inputs.package-name }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ inputs.npm-registry }}" == "https://registry.npmjs.org" ]]; then
+            echo "| Package Name | [\`${{ inputs.package-name }}\`](https://www.npmjs.com/package/${{ inputs.package-name }}) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Package Name | \`${{ inputs.package-name }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "| Version | \`${{ inputs.package-version }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Generator | \`typescript-fetch\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Dry Run | ${{ inputs.dry-run }} |" >> $GITHUB_STEP_SUMMARY
