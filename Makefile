@@ -45,9 +45,6 @@ setup-secrets:
 		echo '#   (OIDC/Trusted Publishing does not work locally, so token auth is used as fallback)' >> .secrets; \
 		echo 'NPM_TOKEN=fake-token-for-testing' >> .secrets; \
 		echo '' >> .secrets; \
-		echo '# Allowed repositories (JSON array)' >> .secrets; \
-		echo '# Include this repo for local testing' >> .secrets; \
-		echo 'ALLOWED_REPOS=["kubev2v/migration-planner-client-generator"]' >> .secrets; \
 		echo "✅ Created .secrets file"; \
 		echo ""; \
 		echo "Edit .secrets if you need to customize the values."; \

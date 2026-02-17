@@ -8,7 +8,7 @@
 # Output: Generated client is placed in the 'generated-client' directory
 #
 # Authorization: Calls from this repository are automatically authorized.
-# External repositories must be listed in the ALLOWED_REPOS secret.
+# External repositories must be listed in .github/allowed_repos.json (source of truth).
 #
 # Publishing Authentication (in order of precedence):
 #   1. npm Trusted Publishing (OIDC) - preferred, no long-lived tokens needed
@@ -55,11 +55,8 @@ on:
         type: boolean
         default: false
     secrets:
-      ALLOWED_REPOS:
-        description: 'JSON array of authorized repository names'
-        required: true
       NPM_TOKEN:
-        description: 'npm access token - fallback for when OIDC is unavailable (local testing with act-cli)'
+        description: 'npm access token - fallback for when OIDC is unavailable (e.g.: local testing with act-cli)'
         required: false
 
 jobs:
@@ -67,7 +64,7 @@ jobs:
   # Job 1: Authorization Check
   # ===========================================================================
   # This repository is automatically authorized (for CI/testing).
-  # External repositories must be listed in ALLOWED_REPOS secret.
+  # External repositories must be listed in .github/allowed_repos.json.
   # ===========================================================================
   authorize:
     name: Verify Authorization
@@ -78,10 +75,11 @@ jobs:
       - name: Verify caller is authorized
         id: check
         env:
-          ALLOWED_REPOS: ${{ secrets.ALLOWED_REPOS }}
           CALLER_REPO: ${{ github.repository }}
           THIS_REPO: "kubev2v/migration-planner-client-generator"
+          ALLOWED_REPOS_URL: "https://raw.githubusercontent.com/kubev2v/migration-planner-client-generator/main/.github/allowed_repos.json"
         run: |
+          set -e
           # Allow calls from this repository (for CI/testing)
           if [ "$CALLER_REPO" = "$THIS_REPO" ]; then
             echo "authorized=true" >> $GITHUB_OUTPUT
@@ -89,19 +87,18 @@ jobs:
             exit 0
           fi
           
-          # For external callers, validate ALLOWED_REPOS secret
+          # Fetch allowed repos list (source of truth in this repo)
+          ALLOWED_REPOS=$(curl -sL "$ALLOWED_REPOS_URL") || true
           if [ -z "$ALLOWED_REPOS" ]; then
-            echo "::error::ALLOWED_REPOS secret is not configured"
+            echo "::error::Failed to fetch .github/allowed_repos.json"
             exit 1
           fi
           
-          # Validate secret is valid JSON
           if ! echo "$ALLOWED_REPOS" | jq empty 2>/dev/null; then
-            echo "::error::ALLOWED_REPOS secret is not valid JSON"
+            echo "::error::allowed_repos.json is not valid JSON"
             exit 1
           fi
           
-          # Check if caller repo is in the allowed list (exact match)
           if echo "$ALLOWED_REPOS" | jq -e --arg repo "$CALLER_REPO" 'index($repo) != null' > /dev/null; then
             echo "authorized=true" >> $GITHUB_OUTPUT
             echo "✅ Repository is authorized"

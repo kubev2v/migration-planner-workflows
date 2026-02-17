@@ -12,9 +12,11 @@ This is a **GitOps repository** providing a reusable GitHub Actions workflow for
 
 ```
 .
-├── .github/workflows/
-│   ├── generate-and-publish.yml   # Main reusable workflow (workflow_call)
-│   └── test.yml                   # CI test workflow
+├── .github/
+│   ├── allowed_repos.json         # Source of truth: repos allowed to call the workflow
+│   └── workflows/
+│       ├── generate-and-publish.yml   # Main reusable workflow (workflow_call)
+│       └── test.yml                   # CI test workflow
 ├── .actrc                         # act-cli configuration
 ├── .gitignore
 ├── LICENSE                        # Apache-2.0
@@ -32,8 +34,8 @@ This is a **GitOps repository** providing a reusable GitHub Actions workflow for
 
 2. **Authorization Model**
    - **Self-authorization**: This repository is automatically authorized (for CI/testing)
-   - External repos validated via `jq` exact-match against `ALLOWED_REPOS` secret
-   - Secret contains JSON array: `["org/repo1", "org/repo2"]`
+   - External repos validated via `.github/allowed_repos.json` (source of truth in this repo)
+   - Workflow fetches the file from `main`; file is a JSON array: `["org/repo1", "org/repo2"]`
    - Fails fast before any generation occurs
 
 ## Critical Constraints
@@ -79,11 +81,9 @@ This workflow uses **npm Trusted Publishing (OIDC)** as the primary authenticati
 ### Required Secrets
 
 **In this repository:**
-- `ALLOWED_REPOS` - JSON array of authorized external repository names (this repo is auto-authorized)
 - `NPM_TOKEN` - *(optional)* npm access token, only needed for local testing fallback
 
 **In calling repositories:**
-- `ALLOWED_REPOS` - Must be passed through to the reusable workflow
 - Calling workflow must have `permissions: id-token: write` for OIDC
 - Use `secrets: inherit` to pass OIDC permissions to the reusable workflow
 
@@ -133,7 +133,6 @@ For local publish testing:
 ```bash
 # .secrets file for local publish testing
 NPM_TOKEN=npm_your-real-granular-token-here
-ALLOWED_REPOS=["kubev2v/migration-planner-client-generator"]
 ```
 
 ### CI Feature Toggle
@@ -166,9 +165,9 @@ When publishing is enabled, the test package is automatically unpublished after 
 
 ## Security Considerations
 
-1. **Never expose the ALLOWED_REPOS list** - Error messages should not reveal authorized repos
-2. **Use exact string matching** - `jq index()` prevents partial name attacks
-3. **Validate JSON before parsing** - Use `jq empty` to verify format
+1. **Use exact string matching** - `jq index()` prevents partial name attacks
+2. **Validate JSON before parsing** - Use `jq empty` to verify format before use
+3. **Allowed list is in repo** - `.github/allowed_repos.json` is the source of truth; only maintainers can change it
 4. **Secrets are masked** - GitHub automatically masks secret values in logs
 
 ## Related Repositories
@@ -182,9 +181,9 @@ When publishing is enabled, the test package is automatically unpublished after 
 
 ### Adding a New Authorized Repository
 
-1. Update the `ALLOWED_REPOS` secret in GitHub Settings
+1. Edit `.github/allowed_repos.json` in this repository
 2. Add the repo to the JSON array: `["existing/repo", "new/repo"]`
-3. No code changes required
+3. Commit and push to `main` (workflow fetches from `main`)
 
 ### Updating Generator Settings
 
@@ -199,6 +198,5 @@ When publishing is enabled, the test package is automatically unpublished after 
 
 1. If calling from this repo: Should auto-authorize; check workflow syntax
 2. If calling from external repo:
-   - Check `ALLOWED_REPOS` secret is valid JSON
-   - Verify exact repository name match (case-sensitive)
-   - Ensure calling workflow passes `ALLOWED_REPOS` secret through
+   - Ensure the repo is listed in `.github/allowed_repos.json` (exact `owner/repo` match, case-sensitive)
+   - Check that the file is valid JSON and fetchable from `main` (raw GitHub URL)
