@@ -89,7 +89,7 @@ jobs:
           echo "📦 Adding additional package metadata..."
           npm pkg set license="Apache-2.0"
           npm pkg set repository.type="git"
-          npm pkg set repository.url="git+https://github.com/${{ github.repository }}"
+          npm pkg set repository.url="git+https://github.com/${{ github.repository }}.git"
           
           echo "📦 Package configuration:"
           cat package.json | jq '{name, version, license, main, repository}'
@@ -127,9 +127,6 @@ jobs:
         if: ${{ inputs.dry-run != true }}
         working-directory: generated-client
         run: |
-          echo "Debug NPM_CONFIG_USERCONFIG:"
-          cat "$NPM_CONFIG_USERCONFIG"
-          npm config list | grep npmrc
           # Strip token auth from .npmrc so npm falls through to OIDC
           echo "registry=${{ inputs.npm-registry }}" > "$NPM_CONFIG_USERCONFIG"
           echo "🚀 Publishing ${{ inputs.package-name }}@${{ inputs.package-version }} to npm..."
