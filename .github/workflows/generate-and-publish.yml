@@ -129,8 +129,23 @@ jobs:
         run: |
           # Strip token auth from .npmrc so npm falls through to OIDC
           echo "registry=${{ inputs.npm-registry }}" > "$NPM_CONFIG_USERCONFIG"
-          echo "🚀 Publishing ${{ inputs.package-name }}@${{ inputs.package-version }} to npm..."
-          npm publish --access public
+
+          VERSION="${{ inputs.package-version }}"
+          PUBLISH_ARGS="--access public"
+
+          # Detect prerelease: a hyphen after the patch number signals a
+          # prerelease per semver (e.g. 1.0.0-alpha, 2.3.1-rc.1).
+          # npm refuses to publish prereleases without an explicit --tag to
+          # prevent accidentally moving the "latest" dist-tag.
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE_ID="${VERSION#*-}"   # alpha.1, beta, rc.2, …
+            PRERELEASE_TAG="${PRERELEASE_ID%%.*}"  # alpha, beta, rc, …
+            PUBLISH_ARGS+=" --tag ${PRERELEASE_TAG}"
+            echo "📌 Prerelease detected — publishing with dist-tag '${PRERELEASE_TAG}'"
+          fi
+
+          echo "🚀 Publishing ${{ inputs.package-name }}@${VERSION} to npm..."
+          npm publish $PUBLISH_ARGS
           echo "✅ Package published successfully!"
 
       - name: Dry Run Summary
