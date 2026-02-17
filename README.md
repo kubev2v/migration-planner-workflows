@@ -142,11 +142,23 @@ make test-publish
 make clean
 ```
 
+### Allowlist tests (no Docker)
+
+Run allowlist validation and authorize logic tests without act/Docker:
+
+```bash
+make test-allowlist
+```
+
+These tests validate `.github/allowed_repos.json` (valid JSON, array of strings) and that the same allow/deny logic as the workflow behaves correctly (same-repo allowed, list lookup, exact match).
+
 ### Make Targets
 
 | Command | Description |
 |---------|-------------|
-| `make test` | Run workflow in dry-run mode (tests generation/build only) |
+| `make test` | Run workflow in dry-run mode via act (tests generation/build only) |
+| `make test-allowlist` | Run allowlist and authorize logic tests (no Docker) |
+| `make test-all` | Run test-allowlist then make test |
 | `make test-publish` | Run workflow with actual npm publishing + cleanup |
 | `make test-verbose` | Run workflow with verbose output |
 | `make setup-secrets` | Create `.secrets` file template |
@@ -168,12 +180,16 @@ When enabled, test packages are automatically unpublished after successful publi
 ```
 .
 ├── .github/
+│   ├── allowed_repos.json             # Allowed callers (source of truth)
 │   └── workflows/
 │       ├── generate-and-publish.yml   # Reusable workflow
 │       └── test.yml                   # CI test workflow
+├── tests/
+│   ├── validate_allowed_repos.sh      # Validate allowlist JSON
+│   └── test_authorize_logic.sh       # Test authorize allow/deny logic
 ├── .actrc                             # act-cli configuration
 ├── .gitignore                         # Ignores generated-client/, secrets, etc.
-├── Makefile                           # Local testing commands (make test, make clean)
+├── Makefile                           # Local testing commands (make test, make test-allowlist, etc.)
 ├── AGENTS.md                          # AI agent guidelines
 ├── LICENSE                            # Apache-2.0
 └── README.md                          # This file
