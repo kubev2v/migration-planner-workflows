@@ -144,7 +144,7 @@ jobs:
           echo "📦 Adding additional package metadata..."
           npm pkg set license="Apache-2.0"
           npm pkg set repository.type="git"
-          npm pkg set repository.url="https://github.com/${{ github.repository }}"
+          npm pkg set repository.url="git+https://github.com/${{ github.repository }}"
           
           echo "📦 Package configuration:"
           cat package.json | jq '{name, version, license, main, repository}'
