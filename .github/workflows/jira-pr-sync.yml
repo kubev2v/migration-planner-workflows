@@ -40,6 +40,11 @@ jobs:
           NO_TICKET_LABEL: ${{ inputs.no-ticket-label }}
         with:
           script: |
+            // Log what triggered this workflow run
+            const eventName = context.eventName;
+            const action = context.payload.action;
+            core.info(`🔍 Workflow triggered - Event: ${eventName}, Action: ${action}`);
+
             const prBody = context.payload.pull_request.body || '';
             const prTitle = context.payload.pull_request.title || '';
             const prNumber = context.payload.pull_request.number;
@@ -193,16 +198,24 @@ jobs:
               .join('\n');
 
             const jiraLinkHeader = '## Jira Links';
-            const newJiraSection = `${jiraLinkHeader}\n${jiraLinksSection}`;
+            const newJiraSection = `${jiraLinkHeader}\n${jiraLinksSection}\n`;
 
             let updatedBody;
             if (prBody.includes(jiraLinkHeader)) {
-              // Replace existing Jira links section
-              const regex = new RegExp(`${jiraLinkHeader}[\\s\\S]*?(?=\\n##|$)`, 'g');
+              // Replace existing Jira links section (only the ## Jira Links section and its list items)
+              // Match: ## Jira Links\n- [TICKET](url)\n- [TICKET](url)\n...
+              // Include trailing newline to match what we create
+              const regex = new RegExp(`${jiraLinkHeader}\\n(?:- \\[.*?\\]\\(.*?\\)\\n)+`, 'g');
               updatedBody = prBody.replace(regex, newJiraSection);
             } else {
               // Append Jira links section at the end
               updatedBody = prBody ? `${prBody}\n\n${newJiraSection}` : newJiraSection;
+            }
+
+            // Only update PR if content actually changed
+            if (updatedBody === prBody) {
+              core.info('✓ Jira links section is already up to date, no PR update needed');
+              return;
             }
 
             // Update PR description
