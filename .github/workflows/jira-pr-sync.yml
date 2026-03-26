@@ -21,6 +21,9 @@ on:
       JIRA_API_TOKEN:
         description: 'Jira API token'
         required: true
+      WORKFLOW_TOKEN:
+        description: 'GitHub token with issues:write permission (optional, falls back to GITHUB_TOKEN)'
+        required: false
 
 jobs:
   sync-jira:
@@ -39,6 +42,7 @@ jobs:
           TICKET_PREFIX: ${{ inputs.ticket-prefix }}
           NO_TICKET_LABEL: ${{ inputs.no-ticket-label }}
         with:
+          github-token: ${{ secrets.WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             // Log what triggered this workflow run
             const eventName = context.eventName;
