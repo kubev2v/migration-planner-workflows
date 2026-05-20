@@ -49,6 +49,11 @@ on:
         required: false
         type: boolean
         default: false
+      model-property-naming:
+        description: 'Naming convention for model properties (camelCase, PascalCase, snake_case, original)'
+        required: false
+        type: string
+        default: 'camelCase'
 
 jobs:
   generate-and-publish:
@@ -78,7 +83,7 @@ jobs:
           openapi-url: ${{ inputs.openapi-spec-url }}
           command-args: >-
             -o generated-client
-            --additional-properties=npmName=${{ inputs.package-name }},npmVersion=${{ inputs.package-version }},ensureUniqueParams=true,supportsES6=true,withInterfaces=true,importFileExtension=.js
+            --additional-properties=npmName=${{ inputs.package-name }},npmVersion=${{ inputs.package-version }},ensureUniqueParams=true,supportsES6=true,withInterfaces=true,importFileExtension=.js,modelPropertyNaming=${{ inputs.model-property-naming }}
 
       # -----------------------------------------------------------------------
       # Step 3: Configure additional package metadata
