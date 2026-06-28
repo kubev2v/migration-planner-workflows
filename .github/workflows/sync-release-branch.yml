@@ -1,0 +1,137 @@
+# =============================================================================
+# Reusable Workflow: Sync Release Branch
+# =============================================================================
+# Automatically syncs release branches when base branches (main/master/stable)
+# are updated. Uses direct branch push to ensure release is always aligned
+# with the source branch.
+#
+# Features:
+#   - Direct branch push (git push origin source:release)
+#   - Supports main, master, and stable branch triggers
+#   - Auto-creates missing release branches
+#   - Skips push if already in sync (optimization)
+#   - Single-line configuration file (.github/release-config.txt)
+#
+# Usage:
+#   See migration-planner-workflows README.md for complete setup guide
+#
+# Repository: kubev2v/migration-planner-workflows
+# =============================================================================
+
+name: Sync Release Branch (Reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync Release Branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to compare SHAs
+
+      - name: 🔍 Determine source and target branches
+        id: config
+        run: |
+          # Get the branch that triggered this workflow
+          CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "Source branch: $CURRENT_BRANCH"
+
+          # Read release branch from config
+          if [ ! -f .github/release-config.txt ]; then
+            echo "❌ Error: .github/release-config.txt not found"
+            exit 1
+          fi
+
+          RELEASE_BRANCH=$(head -n 1 .github/release-config.txt | tr -d '[:space:]')
+
+          if [ -z "$RELEASE_BRANCH" ]; then
+            echo "❌ Error: .github/release-config.txt is empty"
+            exit 1
+          fi
+
+          # Validate release branch format
+          if ! echo "$RELEASE_BRANCH" | grep -qE '^release-[0-9]+\.[0-9]+$'; then
+            echo "❌ Error: Invalid release branch format: $RELEASE_BRANCH"
+            echo "Expected format: release-X.Y (e.g., release-0.17)"
+            exit 1
+          fi
+
+          echo "current-branch=$CURRENT_BRANCH" >> $GITHUB_OUTPUT
+          echo "release-branch=$RELEASE_BRANCH" >> $GITHUB_OUTPUT
+          echo "✅ Target branch: $RELEASE_BRANCH"
+
+      - name: ⚖️  Check if already in sync
+        id: check
+        run: |
+          CURRENT_BRANCH="${{ steps.config.outputs.current-branch }}"
+          RELEASE_BRANCH="${{ steps.config.outputs.release-branch }}"
+
+          CURRENT_SHA=$(git rev-parse origin/$CURRENT_BRANCH)
+          RELEASE_SHA=$(git rev-parse origin/$RELEASE_BRANCH 2>/dev/null || echo "missing")
+
+          echo "Current branch SHA: $CURRENT_SHA"
+          echo "Release branch SHA: $RELEASE_SHA"
+
+          if [ "$CURRENT_SHA" = "$RELEASE_SHA" ]; then
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "✅ Already in sync - no push needed"
+          elif [ "$RELEASE_SHA" = "missing" ]; then
+            echo "status=create" >> $GITHUB_OUTPUT
+            echo "📝 Release branch does not exist - will create"
+          else
+            echo "status=update" >> $GITHUB_OUTPUT
+            echo "🔄 Release branch will be updated"
+          fi
+
+      - name: 🚀 Sync release branch
+        if: steps.check.outputs.status != 'skipped'
+        run: |
+          CURRENT_BRANCH="${{ steps.config.outputs.current-branch }}"
+          RELEASE_BRANCH="${{ steps.config.outputs.release-branch }}"
+
+          echo "Executing: git push origin $CURRENT_BRANCH:$RELEASE_BRANCH"
+          git push origin $CURRENT_BRANCH:$RELEASE_BRANCH
+
+          if [ "${{ steps.check.outputs.status }}" = "create" ]; then
+            echo "✅ Created $RELEASE_BRANCH from $CURRENT_BRANCH"
+          else
+            echo "✅ Synced $RELEASE_BRANCH from $CURRENT_BRANCH"
+          fi
+
+      - name: 📊 Summary
+        if: always()
+        run: |
+          echo "## Release Branch Sync" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Source Branch | \`${{ steps.config.outputs.current-branch }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release Branch | \`${{ steps.config.outputs.release-branch }}\` |" >> $GITHUB_STEP_SUMMARY
+
+          STATUS="${{ steps.check.outputs.status }}"
+          case "$STATUS" in
+            skipped)
+              echo "| Status | ✅ Already in sync |" >> $GITHUB_STEP_SUMMARY
+              ;;
+            create)
+              echo "| Status | ✨ Created |" >> $GITHUB_STEP_SUMMARY
+              ;;
+            update)
+              echo "| Status | 🔄 Updated |" >> $GITHUB_STEP_SUMMARY
+              ;;
+            *)
+              echo "| Status | ❓ Unknown |" >> $GITHUB_STEP_SUMMARY
+              ;;
+          esac
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** \`sync-release-branch.yml\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** \`kubev2v/migration-planner-workflows\`" >> $GITHUB_STEP_SUMMARY
