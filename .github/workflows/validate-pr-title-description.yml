@@ -1,0 +1,121 @@
+name: Validate PR title and description
+
+on:
+  workflow_call:
+    inputs:
+      allowed-types:
+        required: false
+        type: string
+        default: '["feat","fix","ci","build","chore","docs","refactor","test","style","perf"]'
+        description: "JSON array of allowed PR types"
+      jira-pattern:
+        required: false
+        type: string
+        default: "[A-Z]+-[0-9]+"
+        description: "Regex for JIRA ticket"
+      jira-required-types:
+        required: false
+        type: string
+        default: '["feat","fix"]'
+        description: "JSON array of PR types that require JIRA tickets"
+    outputs:
+      pr-type:
+        description: "The PR type extracted from the title"
+        value: ${{ jobs.validate.outputs.pr-type }}
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      pr-type: ${{ steps.validate-pr.outputs.pr-type }}
+
+    steps:
+      - name: Validate PR title and description
+        id: validate-pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allowedTypes = JSON.parse('${{ inputs.allowed-types }}');
+            const jiraPattern = new RegExp('${{ inputs.jira-pattern }}');
+            const jiraRequiredTypes = JSON.parse('${{ inputs.jira-required-types }}');
+
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("This workflow must run on pull_request");
+              return;
+            }
+
+            const prTitle = pr.title;
+            const prBody = pr.body || '';
+
+            // ---- Rule 1: Parse PR title to extract type ----
+            // Pattern 1: <JIRA> | <type>: <title> (e.g., "ECOPROJECT-123 | feat: add login")
+            // Pattern 2: <type>: <title> (e.g., "feat: add login")
+            const titlePattern = /^(?:[A-Z]+-[0-9]+\s*\|\s*)?([a-zA-Z]+):\s*(.+)$/;
+            const match = prTitle.match(titlePattern);
+
+            if (!match) {
+              core.setFailed(
+                `❌ Invalid PR title format: "${prTitle}"\n\n` +
+                `📋 Expected format:\n` +
+                `  [JIRA-TICKET |] type: description\n\n` +
+                `📝 Examples:\n` +
+                `  - feat: add user login flow\n` +
+                `  - ECOPROJECT-123 | fix: handle null pointer\n` +
+                `  - chore: update dependencies\n\n` +
+                `✅ Allowed types: ${allowedTypes.join(', ')}`
+              );
+              return;
+            }
+
+            // ---- Rule 2: Validate PR type is allowed ----
+            const prType = match[1].toLowerCase();
+            const prDescription = match[2];
+
+            if (!allowedTypes.includes(prType)) {
+              core.setFailed(
+                `❌ Invalid PR type: "${match[1]}"\n\n` +
+                `The type "${match[1]}" is not in the allowed types list.\n\n` +
+                `✅ Allowed types: ${allowedTypes.join(', ')}`
+              );
+              return;
+            }
+
+            // ---- Rule 3: Check message is not empty ----
+            if (!prDescription.trim()) {
+              core.setFailed(
+                `❌ Empty PR description: "${prTitle}"\n\n` +
+                `The PR description after the type cannot be empty.`
+              );
+              return;
+            }
+
+            // ---- Rule 4: JIRA validation (conditional based on type) ----
+            if (jiraRequiredTypes.includes(prType)) {
+              const hasJiraInTitle = jiraPattern.test(prTitle);
+              const hasJiraInBody = jiraPattern.test(prBody);
+
+              if (!hasJiraInTitle && !hasJiraInBody) {
+                core.setFailed(
+                  `❌ Missing JIRA ticket for "${prType}" PR: "${prTitle}"\n\n` +
+                  `PRs of type "${prType}" require a JIRA ticket reference.\n` +
+                  `The JIRA ticket can be in the PR title or description.\n\n` +
+                  `📝 Title examples:\n` +
+                  `  - ECOPROJECT-123 | ${prType}: ${prDescription}\n` +
+                  `  - ${prType}: ${prDescription}\n\n` +
+                  `📄 Description example:\n` +
+                  `  Fixes: ECOPROJECT-123`
+                );
+                return;
+              }
+            }
+
+            // ---- All validations passed ----
+            core.info(`✅ PR title is valid`);
+            core.info(`📦 PR type: ${prType}`);
+
+            // Export PR type as output for other workflows
+            core.setOutput('pr-type', prType);

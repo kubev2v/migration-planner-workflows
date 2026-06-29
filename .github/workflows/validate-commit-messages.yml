@@ -1,0 +1,147 @@
+name: Validate commit messages
+
+on:
+  workflow_call:
+    inputs:
+      types:
+        required: false
+        type: string
+        default: '["feat","fix","ci","build","chore","docs","refactor","test","style","perf"]'
+        description: "JSON array of allowed types (e.g. ['feat','fix'])"
+      jira-pattern:
+        required: false
+        type: string
+        default: "[A-Z]+-[0-9]+"
+        description: "Regex for Jira ticket"
+      jira-required-types:
+        required: false
+        type: string
+        default: '["feat","fix"]'
+        description: "JSON array of commit types that require JIRA tickets"
+      skip-authors:
+        required: false
+        type: string
+        default: '[]'
+        description: "JSON array of GitHub usernames to skip validation for (e.g. bots)"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate commits
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const types = JSON.parse('${{ inputs.types }}');
+            const jiraPattern = new RegExp('${{ inputs.jira-pattern }}');
+            const jiraRequiredTypes = JSON.parse('${{ inputs.jira-required-types }}');
+            const skipAuthors = JSON.parse('${{ inputs.skip-authors }}');
+
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("This workflow must run on pull_request");
+              return;
+            }
+
+            // Skip validation for specific authors (e.g., bots)
+            const prAuthor = pr.user.login;
+            if (skipAuthors.includes(prAuthor)) {
+              core.info(`Skipping commit validation for author: ${prAuthor}`);
+              return;
+            }
+
+            const commits = await github.paginate(
+              github.rest.pulls.listCommits,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100
+              }
+            );
+
+            const errors = [];
+
+            // Build format description to reuse in all error messages
+            const formatDescription =
+              `\n📋 Expected format:\n` +
+              `  Subject: [TICKET |] type: message\n` +
+              `  Body: Optional, can include JIRA reference\n\n` +
+              `✅ Allowed types: ${types.join(', ')}\n\n` +
+              `📝 Subject examples:\n` +
+              `  - feat: add login flow\n` +
+              `  - ECOPROJECT-123 | fix: handle null pointer\n` +
+              `  - chore: update dependencies\n\n` +
+              `📄 Body example:\n` +
+              `  Fixes: ECOPROJECT-123`;
+
+            for (const commit of commits) {
+              const message = commit.commit.message;
+              const [subject, ...bodyParts] = message.split("\n");
+              const body = bodyParts.join("\n");
+
+              // ---- Rule 1: Check basic subject structure ----
+              // Pattern: [TICKET |] type: message
+              const basicFormat = /^(?:[A-Z]+-[0-9]+\s*\|\s*)?([a-zA-Z]+):\s*(.+)$/;
+              const basicMatch = subject.match(basicFormat);
+
+              if (!basicMatch) {
+                errors.push(
+                  `❌ Invalid subject format: "${subject}"\n` +
+                  `\nThe subject must follow the pattern: [TICKET |] type: message` +
+                  formatDescription
+                );
+                continue; // Skip to next commit
+              }
+
+              // ---- Rule 2: Validate commit type ----
+              const commitType = basicMatch[1].toLowerCase();
+              const commitMessage = basicMatch[2];
+
+              if (!types.includes(commitType)) {
+                errors.push(
+                  `❌ Invalid commit type: "${basicMatch[1]}"\n` +
+                  `\nThe type "${basicMatch[1]}" is not in the allowed types list.` +
+                  formatDescription
+                );
+                continue; // Skip to next commit
+              }
+
+              // ---- Rule 3: Check message is not empty ----
+              if (!commitMessage.trim()) {
+                errors.push(
+                  `❌ Empty commit message: "${subject}"\n` +
+                  `\nThe commit message after the type cannot be empty.` +
+                  formatDescription
+                );
+                continue;
+              }
+
+              // ---- Rule 4: JIRA validation (conditional based on type) ----
+              if (jiraRequiredTypes.includes(commitType)) {
+                // For feat/fix: JIRA ticket is REQUIRED (no bypass allowed)
+                const hasTicketInSubject = jiraPattern.test(subject);
+                const hasTicketInBody = jiraPattern.test(body);
+
+                if (!hasTicketInSubject && !hasTicketInBody) {
+                  errors.push(
+                    `❌ Missing JIRA ticket for "${commitType}" commit: "${subject}"\n` +
+                    `\nCommits of type "${commitType}" require a JIRA ticket reference.\n` +
+                    `The JIRA ticket can be in the subject or body.` +
+                    formatDescription
+                  );
+                }
+              }
+              // For other types (ci, chore, docs, etc.): No JIRA validation required
+            }
+
+            if (errors.length > 0) {
+              core.setFailed(
+                `Commit message validation failed:\n\n${errors.join("\n\n---\n\n")}`
+              );
+            }
