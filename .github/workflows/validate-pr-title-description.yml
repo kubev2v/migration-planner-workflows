@@ -18,6 +18,11 @@ on:
         type: string
         default: '["feat","fix"]'
         description: "JSON array of PR types that require JIRA tickets"
+      skip-authors:
+        required: false
+        type: string
+        default: '[]'
+        description: "JSON array of GitHub usernames to skip validation for (e.g. bots)"
     outputs:
       pr-type:
         description: "The PR type extracted from the title"
@@ -41,10 +46,18 @@ jobs:
             const allowedTypes = JSON.parse('${{ inputs.allowed-types }}');
             const jiraPattern = new RegExp('${{ inputs.jira-pattern }}');
             const jiraRequiredTypes = JSON.parse('${{ inputs.jira-required-types }}');
+            const skipAuthors = JSON.parse('${{ inputs.skip-authors }}');
 
             const pr = context.payload.pull_request;
             if (!pr) {
               core.setFailed("This workflow must run on pull_request");
+              return;
+            }
+
+            // Skip validation for specific authors (e.g., bots)
+            const prAuthor = pr.user.login;
+            if (skipAuthors.includes(prAuthor)) {
+              core.info(`Skipping PR title validation for author: ${prAuthor}`);
               return;
             }
 
