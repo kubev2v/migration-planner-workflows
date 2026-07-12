@@ -1,0 +1,66 @@
+# =============================================================================
+# Reusable Workflow: Repository Dispatch Notify
+# =============================================================================
+# Sends a repository_dispatch event to a target repository. Used by source
+# repos to notify a downstream repo (e.g. migration-planner) that a new
+# commit has been pushed, so it can react by updating a submodule, config
+# file, or similar.
+#
+# The calling workflow owns the trigger (typically on.push) and any
+# pre-notify steps (e.g. waiting for a container image to be available).
+#
+# Repository: kubev2v/migration-planner-workflows
+# =============================================================================
+
+name: Repository Dispatch Notify (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      event-type:
+        description: 'The repository_dispatch event type to send (e.g. "agent_repo_updated")'
+        type: string
+        required: true
+      target-repo:
+        description: 'The target repository to notify (owner/name, e.g. "kubev2v/migration-planner")'
+        type: string
+        default: 'kubev2v/migration-planner'
+    secrets:
+      APP_ID:
+        description: 'GitHub App ID for generating a token to dispatch events'
+        required: true
+      APP_PRIVATE_KEY:
+        description: 'GitHub App private key for generating a token to dispatch events'
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse target repository
+        id: target
+        env:
+          TARGET_REPO: ${{ inputs.target-repo }}
+        run: |
+          echo "owner=${TARGET_REPO%%/*}" >> $GITHUB_OUTPUT
+          echo "name=${TARGET_REPO##*/}" >> $GITHUB_OUTPUT
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ steps.target.outputs.owner }}
+          repositories: ${{ steps.target.outputs.name }}
+
+      - name: Send repository_dispatch
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api "repos/${{ inputs.target-repo }}/dispatches" \
+            --method POST \
+            -f "event_type=${{ inputs.event-type }}" \
+            -f "client_payload[sha]=${{ github.sha }}" \
+            -f "client_payload[repo]=${{ github.repository }}" \
+            -f "client_payload[target_branch]=${{ github.ref_name }}"
