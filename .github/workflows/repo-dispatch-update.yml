@@ -1,0 +1,103 @@
+# =============================================================================
+# Reusable Workflow: Repository Dispatch Update
+# =============================================================================
+# Handles the common pattern of reacting to a repository_dispatch event by
+# updating a file or submodule and creating a PR. The calling workflow owns
+# the trigger and if-guard; this workflow handles checkout, update, token
+# generation, and PR creation.
+#
+# Usage:
+#   The calling workflow must:
+#   1. Trigger on repository_dispatch with the appropriate event type
+#   2. Guard with an `if:` on the expected source repo
+#   3. Forward payload fields (sha, target-branch, source-repo) as inputs
+#   4. Pass the update logic as a shell command via update-command
+#   5. Pass GitHub App credentials via secrets
+#
+# Repository: kubev2v/migration-planner-workflows
+# =============================================================================
+
+name: Repository Dispatch Update (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: 'Commit SHA from the dispatch payload'
+        type: string
+        required: true
+      target-branch:
+        description: 'Branch to target for checkout and PR base'
+        type: string
+        required: true
+      source-repo:
+        description: 'Source repository that triggered the dispatch (used in PR body)'
+        type: string
+        required: true
+      component-name:
+        description: 'Human-readable component name (e.g. "Agent submodule") — used in PR title and commit message'
+        type: string
+        required: true
+      pr-branch-prefix:
+        description: 'Prefix for the PR branch name (e.g. "update-agent-submodule")'
+        type: string
+        required: true
+      update-command:
+        description: 'Shell commands to run for the update step. SHA is available as an environment variable.'
+        type: string
+        required: true
+    secrets:
+      APP_ID:
+        description: 'GitHub App ID for generating a token to create PRs'
+        required: true
+      APP_PRIVATE_KEY:
+        description: 'GitHub App private key for generating a token to create PRs'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ inputs.pr-branch-prefix }}-${{ inputs.target-branch }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target-branch }}
+          submodules: true
+          persist-credentials: false
+
+      - name: Run update
+        env:
+          SHA: ${{ inputs.sha }}
+        run: ${{ inputs.update-command }}
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: kubev2v
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: ${{ inputs.pr-branch-prefix }}-${{ inputs.target-branch }}
+          base: ${{ inputs.target-branch }}
+          commit-message: |
+            chore: ${{ inputs.component-name }} changes have been detected.
+            Update to SHA: ${{ inputs.sha }}.
+            Branch: ${{ inputs.target-branch }}
+          title: "[AUTOMATION] Update ${{ inputs.component-name }} (${{ inputs.target-branch }})"
+          body: |
+            Auto update triggered by ${{ inputs.source-repo }}.
+            - **Branch**: ${{ inputs.target-branch }}
+            - **SHA**: ${{ inputs.sha }}
+          delete-branch: true
