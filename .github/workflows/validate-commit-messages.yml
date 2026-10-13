@@ -6,7 +6,7 @@ on:
       types:
         required: false
         type: string
-        default: '["feat","fix","ci","build","chore","docs","refactor","test","style","perf"]'
+        default: '["feat","fix","ci","build","chore","docs","refactor","test","style","perf","revert"]'
         description: "JSON array of allowed types (e.g. ['feat','fix'])"
       jira-pattern:
         required: false
