@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate config for kubev2v projects",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "tekton": {
+    "enabled": true,
+    "packageRules": [
+      {
+        "description": "Automerge Tekton task updates (digests + versions)",
+        "matchUpdateTypes": ["digest", "pinDigest", "patch", "minor"],
+        "platformAutomerge": true,
+        "automerge": true
+      }
+    ],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Automerge non-major updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "platformAutomerge": true,
+      "automerge": true
+    },
+    {
+      "description": "Automerge Dockerfile base image digest updates",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["digest"],
+      "automerge": true,
+      "platformAutomerge": true
+    }
+  ]
+}
