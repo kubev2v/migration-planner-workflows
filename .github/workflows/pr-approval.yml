@@ -172,3 +172,15 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Withdraw approval and disable auto-merge
+        if: steps.check.outputs.approved == 'false'
+        run: |
+          # Actively block the PR to prevent merge with unauthorized files
+          gh pr review "$PR_URL" --request-changes \
+            --body "Auto-approval withdrawn: PR contains files outside allowed paths."
+          # Disable auto-merge
+          gh pr merge "$PR_URL" --disable-auto || true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
