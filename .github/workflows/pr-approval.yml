@@ -176,11 +176,30 @@ jobs:
       - name: Withdraw approval and disable auto-merge
         if: steps.check.outputs.approved == 'false'
         run: |
-          # Actively block the PR to prevent merge with unauthorized files
-          gh pr review "$PR_URL" --request-changes \
-            --body "Auto-approval withdrawn: PR contains files outside allowed paths."
+          # Only act if auto-merge was enabled by a Bot (our GitHub App), not by a human
+          ENABLED_BY_TYPE=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            --jq '.auto_merge.enabled_by.type // empty')
+
+          if [ "$ENABLED_BY_TYPE" != "Bot" ]; then
+            echo "Auto-merge is not enabled or was not enabled by our bot — skipping"
+            exit 0
+          fi
+
+          echo "Auto-merge was enabled — withdrawing"
+
           # Disable auto-merge
-          gh pr merge "$PR_URL" --disable-auto || true
+          gh pr merge "$PR_URL" --disable-auto
+
+          # Dismiss our approval review (find the last APPROVED review and dismiss it)
+          REVIEW_ID=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
+            --jq '[.[] | select(.state == "APPROVED")] | last | .id // empty')
+
+          if [ -n "$REVIEW_ID" ]; then
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/dismissals" \
+              -f message="Auto-approval withdrawn: PR now contains files outside allowed paths."
+            echo "Dismissed approval review $REVIEW_ID"
+          fi
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
