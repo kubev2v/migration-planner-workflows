@@ -27,6 +27,13 @@
       "matchUpdateTypes": ["digest"],
       "automerge": true,
       "platformAutomerge": true
+    },
+    {
+      "description": "Automerge Go module digest updates",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["digest"],
+      "automerge": true,
+      "platformAutomerge": true
     }
   ]
 }
