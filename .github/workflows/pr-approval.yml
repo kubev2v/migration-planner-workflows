@@ -176,12 +176,12 @@ jobs:
       - name: Withdraw approval and disable auto-merge
         if: steps.check.outputs.approved == 'false'
         run: |
-          # Only act if auto-merge was enabled by a Bot (our GitHub App), not by a human
-          ENABLED_BY_TYPE=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
-            --jq '.auto_merge.enabled_by.type // empty')
+          # Only act if auto-merge was enabled by our GitHub App, not by another bot or a human
+          ENABLED_BY_LOGIN=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            --jq '.auto_merge.enabled_by.login // empty')
 
-          if [ "$ENABLED_BY_TYPE" != "Bot" ]; then
-            echo "Auto-merge is not enabled or was not enabled by our bot — skipping"
+          if [ "$ENABLED_BY_LOGIN" != "${APP_SLUG}[bot]" ]; then
+            echo "Auto-merge is not enabled or was not enabled by our bot (${APP_SLUG}[bot]) — skipping"
             exit 0
           fi
 
@@ -203,3 +203,4 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
