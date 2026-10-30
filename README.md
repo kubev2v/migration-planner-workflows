@@ -246,6 +246,17 @@ To enable actual npm publishing in CI:
 
 When enabled, test packages are automatically unpublished after successful publish.
 
+## Repository Dispatch Image Tags
+
+`repo-dispatch-notify.yml` accepts an optional `image-tag` string. When supplied,
+it includes that exact value in `client_payload.image_tag` alongside the existing
+SHA, repository, and target branch fields. When omitted, the payload is unchanged.
+
+The receiver can pass `github.event.client_payload.image_tag` into the optional
+`image-tag` input of `repo-dispatch-update.yml`. Its `update-command` receives the
+value as the `IMAGE_TAG` environment variable (empty by default). Validate it
+before updating files; do not interpolate payload values directly into shell code.
+
 ## Repository Structure
 
 ```

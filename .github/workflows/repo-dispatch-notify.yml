@@ -25,6 +25,10 @@ on:
         description: 'The target repository to notify (owner/name, e.g. "kubev2v/migration-planner")'
         type: string
         default: 'kubev2v/migration-planner'
+      image-tag:
+        description: 'Optional released image tag to include in the dispatch payload'
+        type: string
+        default: ''
     secrets:
       APP_ID:
         description: 'GitHub App ID for generating a token to dispatch events'
@@ -57,10 +61,17 @@ jobs:
       - name: Send repository_dispatch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
         run: |
+          set -euo pipefail
+          EXTRA_FIELDS=()
+          if [[ -n "$IMAGE_TAG" ]]; then
+            EXTRA_FIELDS+=(-f "client_payload[image_tag]=$IMAGE_TAG")
+          fi
           gh api "repos/${{ inputs.target-repo }}/dispatches" \
             --method POST \
             -f "event_type=${{ inputs.event-type }}" \
             -f "client_payload[sha]=${{ github.sha }}" \
             -f "client_payload[repo]=${{ github.repository }}" \
-            -f "client_payload[target_branch]=${{ github.ref_name }}"
+            -f "client_payload[target_branch]=${{ github.ref_name }}" \
+            "${EXTRA_FIELDS[@]}"

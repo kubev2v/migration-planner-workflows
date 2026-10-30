@@ -26,6 +26,10 @@ on:
         description: 'Commit SHA from the dispatch payload'
         type: string
         required: true
+      image-tag:
+        description: 'Optional image tag from the dispatch payload; available as IMAGE_TAG in update-command'
+        type: string
+        default: ''
       target-branch:
         description: 'Branch to target for checkout and PR base'
         type: string
@@ -75,6 +79,7 @@ jobs:
       - name: Run update
         env:
           SHA: ${{ inputs.sha }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
         run: ${{ inputs.update-command }}
 
       - name: Generate GitHub App token
