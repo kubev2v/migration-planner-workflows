@@ -30,6 +30,16 @@ on:
         type: string
         default: '[]'
         description: "JSON array of GitHub usernames to skip (e.g. bots)"
+      jira-ticket-prefix:
+        required: false
+        type: string
+        default: 'OMA'
+        description: "Regex pattern for Jira ticket prefix (e.g. 'OMA' or 'MTV|OMA'). Empty string to disable."
+      jira-base-url:
+        required: false
+        type: string
+        default: 'https://issues.redhat.com/browse'
+        description: "Base URL for Jira ticket links"
 
 jobs:
   # -----------------------------------------------------------------------
@@ -86,10 +96,16 @@ jobs:
       - name: 💬 Post welcome comment
         if: steps.skip.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          JIRA_TICKET_PREFIX: ${{ inputs.jira-ticket-prefix }}
+          JIRA_BASE_URL: ${{ inputs.jira-base-url }}
         with:
           script: |
             const author = context.payload.pull_request.user.login;
-            const body = [
+            const ticketPrefix = process.env.JIRA_TICKET_PREFIX || '';
+            const jiraBaseUrl = process.env.JIRA_BASE_URL || 'https://issues.redhat.com/browse';
+
+            const lines = [
               '<!-- pr-welcome-bot -->',
               `Thanks for your contribution, @${author}! 🎉`,
               '',
@@ -97,7 +113,55 @@ jobs:
               '',
               '- [ ] **Work in progress** — PR is not ready for review (`auto-label/work-in-progress`)',
               '- [ ] **Hold** — PR can\'t be merged, shouldn\'t be reviewed (`auto-label/on-hold`)',
-            ].join('\n');
+            ];
+
+            if (ticketPrefix) {
+              const pattern = new RegExp(`((?:${ticketPrefix})-\\d+)`, 'gi');
+              const tickets = new Set();
+
+              // Extract from PR title
+              const title = context.payload.pull_request.title || '';
+              for (const match of title.matchAll(pattern)) {
+                tickets.add(match[1].toUpperCase());
+              }
+
+              // Extract from PR body
+              const prBody = context.payload.pull_request.body || '';
+              for (const match of prBody.matchAll(pattern)) {
+                tickets.add(match[1].toUpperCase());
+              }
+
+              // Extract from commit messages
+              const commits = await github.paginate(
+                github.rest.pulls.listCommits,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  per_page: 100,
+                }
+              );
+              for (const commit of commits) {
+                const msg = commit.commit.message || '';
+                for (const match of msg.matchAll(pattern)) {
+                  tickets.add(match[1].toUpperCase());
+                }
+              }
+
+              // Build Jira section
+              lines.push('');
+              lines.push('### 🔗 Jira Tickets');
+              if (tickets.size > 0) {
+                const sorted = [...tickets].sort();
+                for (const ticket of sorted) {
+                  lines.push(`- [${ticket}](${jiraBaseUrl}/${ticket})`);
+                }
+              } else {
+                lines.push('_No Jira tickets found in the PR title, description, or commit messages._');
+              }
+            }
+
+            const body = lines.join('\n');
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
