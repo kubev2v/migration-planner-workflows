@@ -30,6 +30,8 @@ permissions:
 
 jobs:
   validate:
+    # Skip inside the reusable workflow to preserve the required check name.
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
 
     steps:
